@@ -1,0 +1,17 @@
+scalar Date
+
+type ShortenedURL {
+  originalUrl: String!
+  shortCode: String!
+  # TODO
+  # expiredAt: Date!
+}
+
+type Query {
+  getUrl(shortCode: String!): ShortenedURL
+}
+
+type Mutation {
+  createUrl(originalUrl: String!, shortCode: String, ttl: Int): ShortenedURL
+  # TODO
+}
