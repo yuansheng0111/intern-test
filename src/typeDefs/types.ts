@@ -9,5 +9,8 @@ export interface Context {
 export interface ShortenedURL {
   originalUrl: string;
   shortCode: string;
-  // TODO
+  id: number;
+  createdAt: Date;
+  updatedAt: Date;
+  expiredAt: Date | null;
 }

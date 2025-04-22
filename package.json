@@ -21,7 +21,7 @@
     "build": "tsc",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
-    "test": "mocha"
+    "test": "mocha --require ts-node/register 'test/**/*.test.ts'"
   },
   "mocha": {
     "require": [

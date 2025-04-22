@@ -1,6 +1,6 @@
 import { graphql, GraphQLSchema } from "graphql";
 import { makeExecutableSchema } from "@graphql-tools/schema";
-import { describe, it, before, after } from "mocha";
+import { describe, it, before, after, beforeEach } from "mocha";
 import should from "should";
 import { PrismaClient } from "@prisma/client";
 import Redis from "ioredis";
@@ -38,6 +38,11 @@ before(async () => {
 after(async () => {
   await prisma.$disconnect();
   await redis.quit();
+});
+
+beforeEach(async () => {
+  await prisma.shortenedURL.deleteMany();
+  await redis.flushall();
 });
 
 describe("URL Shortener Resolvers", () => {
@@ -78,18 +83,159 @@ describe("URL Shortener Resolvers", () => {
     should.equal(savedUrl?.shortCode, result.data.createUrl.shortCode);
 
     const cachedUrl = await redis.get(result.data.createUrl.shortCode);
-    should.equal(cachedUrl, "https://example.com");
+    // should.equal(cachedUrl, "https://example.com");
+    const cachedData = JSON.parse(cachedUrl as string);
+    should.equal(cachedData.originalUrl, "https://example.com");
   });
 
-  it.skip("should get an existing URL", async () => {
-    // TODO
+  it("should get an existing URL", async () => {
+    const originalUrl = "https://existing.com";
+    const shortCode = "existingCode";
+    await prisma.shortenedURL.create({ data: { originalUrl, shortCode } });
+    await redis.set(shortCode, JSON.stringify({ originalUrl, shortCode })); // 模拟已存在的缓存
+
+    const query = `
+      query {
+        getUrl(shortCode: "${shortCode}") {
+          originalUrl
+          shortCode
+        }
+      }
+    `;
+
+    const result: any = await graphql({
+      schema,
+      source: query,
+      contextValue: context,
+    });
+
+    should.not.exist(result.errors);
+    should.exist(result.data);
+    should.equal(result.data.getUrl.originalUrl, originalUrl);
+    should.equal(result.data.getUrl.shortCode, shortCode);
   });
 
-  it.skip("should update an existing URL", async () => {
-    // TODO
+  it("should update an existing URL", async () => {
+    const originalUrl = "https://old.com";
+    const shortCode = "updateCode";
+    const newOriginalUrl = "https://new.com";
+    await prisma.shortenedURL.create({ data: { originalUrl, shortCode } });
+    await redis.set(shortCode, JSON.stringify({ originalUrl, shortCode })); // 模拟已存在的缓存
+
+    const query = `
+      mutation {
+        updateUrl(shortCode: "${shortCode}", newUrl: "${newOriginalUrl}") {
+          originalUrl
+          shortCode
+        }
+      }
+    `;
+
+    const result: any = await graphql({
+      schema,
+      source: query,
+      contextValue: context,
+    });
+
+    should.not.exist(result.errors);
+    should.exist(result.data);
+    should.equal(result.data.updateUrl.originalUrl, newOriginalUrl);
+    should.equal(result.data.updateUrl.shortCode, shortCode);
+
+    const updatedUrl = await prisma.shortenedURL.findUnique({ where: { shortCode } });
+    should.exist(updatedUrl);
+    should.equal(updatedUrl?.originalUrl, newOriginalUrl);
+
+    const cachedUrl = await redis.get(shortCode);
+    should.equal(cachedUrl, JSON.stringify(updatedUrl));
   });
 
-  it.skip("should delete an existing URL", async () => {
-    // TODO
+  it("should delete an existing URL", async () => {
+    const originalUrl = "https://delete.com";
+    const shortCode = "deleteCode";
+    await prisma.shortenedURL.create({ data: { originalUrl, shortCode } });
+    await redis.set(shortCode, JSON.stringify({ originalUrl, shortCode }));
+
+    const query = `
+      mutation {
+        deleteUrl(shortCode: "${shortCode}")
+      }
+    `;
+
+    const result: any = await graphql({
+      schema,
+      source: query,
+      contextValue: context,
+    });
+
+    should.not.exist(result.errors);
+    should.exist(result.data);
+    should.equal(result.data.deleteUrl, true);
+
+    const deletedUrl = await prisma.shortenedURL.findUnique({ where: { shortCode } });
+    should.not.exist(deletedUrl);
+
+    const cachedUrl = await redis.get(shortCode);
+    should.not.exist(cachedUrl);
+  });
+
+  it("should return null for a non-existing URL", async () => {
+    const query = `
+      query {
+        getUrl(shortCode: "nonExistingCode") {
+          originalUrl
+          shortCode
+        }
+      }
+    `;
+
+    const result: any = await graphql({
+      schema,
+      source: query,
+      contextValue: context,
+    });
+
+    should.exist(result.errors);
+    should.not.exist(result.data.getUrl);
+    should.equal(result.errors[0].extensions.code, 'NOT_FOUND');
+  });
+
+  it("should return an error for updateUrl if shortCode does not exist", async () => {
+    const query = `
+      mutation {
+        updateUrl(shortCode: "nonExistentCode", newUrl: "https://new.com") {
+          originalUrl
+          shortCode
+        }
+      }
+    `;
+
+    const result: any = await graphql({
+      schema,
+      source: query,
+      contextValue: context,
+    });
+
+    should.exist(result.errors);
+    should.equal(result.errors[0].message, 'URL with short code "nonExistentCode" not found.');
+    should.equal(result.errors[0].extensions.code, 'NOT_FOUND');
+  });
+
+  it("should return an error for deleteUrl if shortCode does not exist", async () => {
+    const query = `
+      mutation {
+        deleteUrl(shortCode: "nonExistentCode")
+      }
+    `;
+
+    const result: any = await graphql({
+      schema,
+      source: query,
+      contextValue: context,
+    });
+
+    should.exist(result.errors);
+    should.equal(result.errors[0].message, 'URL with short code "nonExistentCode" not found.');
+    should.equal(result.errors[0].extensions.code, 'NOT_FOUND');
   });
 });

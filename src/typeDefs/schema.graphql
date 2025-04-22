@@ -3,8 +3,9 @@ scalar Date
 type ShortenedURL {
   originalUrl: String!
   shortCode: String!
-  # TODO
-  # expiredAt: Date!
+  createdAt: Date!
+  updatedAt: Date!
+  expiredAt: Date
 }
 
 type Query {
@@ -12,6 +13,7 @@ type Query {
 }
 
 type Mutation {
-  createUrl(originalUrl: String!, shortCode: String, ttl: Int): ShortenedURL
-  # TODO
+  createUrl(originalUrl: String!, shortCode: String, ttl: Int): ShortenedURL!
+  updateUrl(shortCode: String!, newUrl: String!): ShortenedURL!
+  deleteUrl(shortCode: String!): Boolean!
 }
