@@ -1,7 +1,21 @@
+import { URL } from "url";
 import { nanoid } from "nanoid";
 import { GraphQLError } from "graphql";
 import { PrismaClient } from '@prisma/client';
 import { Context, ShortenedURL } from "../typeDefs/types";
+
+const generateShortCode = (): string => {
+  return nanoid(10);
+};
+
+const isValidUrl = (url: string): boolean => {
+  try {
+    new URL(url);
+    return true;
+  } catch (error) {
+    return false;
+  }
+};
 
 const checkExistingAndNotExpired = async (
   prisma: PrismaClient,
@@ -68,56 +82,47 @@ export default {
   Mutation: {
     createUrl: async (
       _: any,
-      { originalUrl, shortCode: providedShortCode, ttl }: { originalUrl: string; shortCode?: string; ttl?: number },
+      { originalUrl, shortCode, ttl }: { originalUrl: string; shortCode?: string; ttl?: number },
       { prisma, redis }: Context
     ): Promise<ShortenedURL> => {
-      const MAX_RETRIES = 3;
+      if (!isValidUrl(originalUrl)) {
+        throw new GraphQLError('Invalid URL format.', {
+          extensions: { code: 'BAD_USER_INPUT' },
+        });
+      }
+
+      if (shortCode && !/^[a-zA-Z0-9_-]+$/.test(shortCode)) {
+        throw new GraphQLError('Invalid short code format. Only alphanumeric characters, underscores, and hyphens are allowed.', {
+          extensions: { code: 'BAD_USER_INPUT' },
+        });
+      }
+
+      if (ttl !== undefined && (!Number.isInteger(ttl) || ttl <= 0)) {
+        throw new GraphQLError('TTL must be a positive integer.', {
+          extensions: { code: 'BAD_USER_INPUT' },
+        });
+      }
+
       try {
-        let finalShortCode = providedShortCode;
-        let retries = 0;
-
-        while (!finalShortCode && retries < MAX_RETRIES) {
-          finalShortCode = nanoid(10);
-          const existingUrl = await prisma.shortenedURL.findUnique({
-            where: { shortCode: finalShortCode },
-          });
-          if (!existingUrl) {
-            break;
-          }
-          finalShortCode = undefined; // Reset to try again
-          retries++;
-        }
-
-        if (!finalShortCode) {
-          throw new GraphQLError("Failed to generate a unique short code after multiple retries.", {
-            extensions: { code: "INTERNAL_SERVER_ERROR" },
-          });
-        }
-
-        const existingProvidedCode = providedShortCode ? await prisma.shortenedURL.findUnique({ where: { shortCode: providedShortCode } }) : null;
-        if (existingProvidedCode) {
-          throw new GraphQLError(`Short code "${providedShortCode}" already exists.`, {
-            extensions: { code: "BAD_USER_INPUT" },
-          });
-        }
+        const finalShortCode = shortCode || generateShortCode();
+        const expiredAt = ttl ? new Date(Date.now() + ttl * 1000) : null;
 
         const newUrl = await prisma.shortenedURL.create({
           data: {
             originalUrl,
             shortCode: finalShortCode,
-            expiredAt: ttl ? new Date(Date.now() + ttl * 1000) : null,
+            expiredAt,
           },
         });
 
-        // Cache the new URL with TTL if provided
         const expiryInSeconds = ttl || 3600;
-        await redis.set(finalShortCode, JSON.stringify(newUrl), "EX", expiryInSeconds);
+        await redis.set(finalShortCode, JSON.stringify(newUrl), 'EX', expiryInSeconds);
 
         return newUrl;
       } catch (error) {
-        console.error("Error in createUrl resolver:", error);
-        throw new GraphQLError("Failed to create shortened URL", {
-          extensions: { code: "INTERNAL_SERVER_ERROR" },
+        console.error('Error in createUrl resolver:', error);
+        throw new GraphQLError('Failed to create shortened URL', {
+          extensions: { code: 'INTERNAL_SERVER_ERROR' },
         });
       }
     },
@@ -126,6 +131,12 @@ export default {
       { shortCode, newUrl: originalUrl }: { shortCode: string; newUrl: string },
       { prisma, redis }: Context
     ): Promise<ShortenedURL | null> => {
+      if (!isValidUrl(originalUrl)) {
+        throw new GraphQLError('Invalid URL format.', {
+          extensions: { code: 'BAD_USER_INPUT' },
+        });
+      }
+      
       try {
         const existingUrl = await checkExistingAndNotExpired(prisma, shortCode);
 

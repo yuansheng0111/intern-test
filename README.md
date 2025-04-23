@@ -160,6 +160,7 @@ it('should create a new shortened URL', async () => {
 ```
 
 #### 優化（intern 應徵者可選擇性作答）
-
-- 實作 Bloom Filter，用以在查詢 Redis/MySQL 前檢查資料是否存在。
-- 其他優化想法
+1. 輸入驗證：
+    - URL 需為有效格式
+    - 如果提供 shortCode，只包含字母、數字、_和-
+    - 如果提供 ttl，則必須是一個正整數
