@@ -164,3 +164,6 @@ it('should create a new shortened URL', async () => {
     - URL 需為有效格式
     - 如果提供 shortCode，只包含字母、數字、_和-
     - 如果提供 ttl，則必須是一個正整數
+
+2. 提升效率：
+    - 實作 Bloom Filter 以快速判斷 `shortCode` 是否可能存在，減少不必要的資料庫查詢
