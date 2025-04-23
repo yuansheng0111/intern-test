@@ -7,6 +7,7 @@ import { loadFiles } from '@graphql-tools/load-files';
 import { makeExecutableSchema } from '@graphql-tools/schema';
 import path from 'path';
 import { initializeBloomFilter, initializeBloomFilterClients } from './utils/bloom';
+import logger from './logger'
 
 const prisma = new PrismaClient();
 const redis = new Redis({
@@ -17,6 +18,7 @@ const redis = new Redis({
 });
 
 async function startServer() {
+  logger.info('[Server]: Starting server...');
   initializeBloomFilterClients(redis, prisma);
   await initializeBloomFilter();
 
@@ -43,10 +45,10 @@ async function startServer() {
 
   const PORT = process.env.PORT || 4000;
   app.listen(PORT, () => {
-    console.log(`Server is running on http://localhost:${PORT}/graphql`);
+    logger.info(`[Server]: Server is running on http://localhost:${PORT}/graphql`);
   });
 }
 
 startServer().catch((error) => {
-  console.error('Error starting server:', error);
+  logger.error('[Server Error]: Error starting server:', error);
 });

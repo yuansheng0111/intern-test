@@ -10,6 +10,8 @@
     "graphql-tools": "^9.0.1",
     "ioredis": "^5.4.1",
     "nanoid": "3.x.x",
+    "pino": "^9.6.0",
+    "pino-pretty": "^13.0.0",
     "prisma": "^5.19.1"
   },
   "name": "url_shorten",
@@ -18,7 +20,7 @@
   "license": "MIT",
   "scripts": {
     "start": "ts-node src/index.ts",
-    "dev": "ts-node-dev --respawn --transpile-only src/index.ts",
+    "dev": "ts-node-dev --respawn --transpile-only src/index.ts | pino-pretty",
     "build": "tsc",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",

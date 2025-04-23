@@ -167,3 +167,7 @@ it('should create a new shortened URL', async () => {
 
 2. 提升效率：
     - 實作 Bloom Filter 以快速判斷 `shortCode` 是否可能存在，減少不必要的資料庫查詢
+
+3. 監控與日誌：
+    - 引入 Pino 進行結構化日誌記錄，輸出到終端 (易讀格式) 和 `app.log` 檔案
+    - 記錄關鍵應用程式事件、API 請求

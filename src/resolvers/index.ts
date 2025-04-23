@@ -4,6 +4,7 @@ import { GraphQLError } from "graphql";
 import { PrismaClient } from '@prisma/client';
 import { Context, ShortenedURL } from "../typeDefs/types";
 import { addShortCodeToBloomFilter, isShortCodeInBloomFilter } from '../utils/bloom';
+import logger from '../logger'
 
 const generateShortCode = (): string => {
   return nanoid(10);
@@ -46,6 +47,7 @@ export default {
       { shortCode }: { shortCode: string },
       { prisma, redis }: Context
     ): Promise<ShortenedURL | null> => {
+      logger.info('[API Request]: Received getUrl request', { shortCode });
 
       if (!isShortCodeInBloomFilter(shortCode)) {
         throw new GraphQLError('URL not found.', {
@@ -73,10 +75,11 @@ export default {
           ? Math.max(0, Math.floor((new Date(existingUrl.expiredAt).getTime() - Date.now()) / 1000))
           : 3600; // Default 1 hour
         await redis.set(shortCode, JSON.stringify(existingUrl), "EX", expiryInSeconds);
+
+        logger.info('[API Response]: getUrl completed', { shortCode });
         return existingUrl;
-        
       } catch (error) {
-        console.error("Error in getUrl resolver:", error);
+        logger.error('[API Error]: Error getting URL', { error, shortCode });
         if (error instanceof GraphQLError && error.extensions.code === 'NOT_FOUND') {
           throw error; // Re-throw NOT_FOUND error
         }
@@ -92,6 +95,7 @@ export default {
       { originalUrl, shortCode, ttl }: { originalUrl: string; shortCode?: string; ttl?: number },
       { prisma, redis }: Context
     ): Promise<ShortenedURL> => {
+      logger.info('[API Request]: Received createUrl request', { originalUrl, shortCode, ttl });
       if (!isValidUrl(originalUrl)) {
         throw new GraphQLError('Invalid URL format.', {
           extensions: { code: 'BAD_USER_INPUT' },
@@ -127,9 +131,11 @@ export default {
 
         await addShortCodeToBloomFilter(finalShortCode);
 
+        logger.info('[API Response]: createUrl completed', { id: newUrl.id, shortCode: newUrl.shortCode });
+
         return newUrl;
       } catch (error) {
-        console.error('Error in createUrl resolver:', error);
+        logger.error('[API Error]: Error creating URL', { error, originalUrl, shortCode, ttl });
         throw new GraphQLError('Failed to create shortened URL', {
           extensions: { code: 'INTERNAL_SERVER_ERROR' },
         });
@@ -140,6 +146,7 @@ export default {
       { shortCode, newUrl: originalUrl }: { shortCode: string; newUrl: string },
       { prisma, redis }: Context
     ): Promise<ShortenedURL | null> => {
+      logger.info('[API Request]: Received updateUrl request', { shortCode, originalUrl });
       if (!isValidUrl(originalUrl)) {
         throw new GraphQLError('Invalid URL format.', {
           extensions: { code: 'BAD_USER_INPUT' },
@@ -156,10 +163,11 @@ export default {
 
         // Update the cache
         await redis.set(shortCode, JSON.stringify(updatedUrl));
-
+        
+        logger.info('[API Response]: updateUrl completed', { shortCode });
         return updatedUrl;
       } catch (error) {
-        console.error("Error in updateUrl resolver:", error);
+        logger.error('[API Error]: Error updating URL', { error, shortCode, originalUrl });
         if (error instanceof GraphQLError) {
           throw error; // Re-throw GraphQL errors
         }
@@ -173,6 +181,8 @@ export default {
       { shortCode }: { shortCode: string },
       { prisma, redis }: Context
     ): Promise<boolean> => {
+      logger.info('[API Request]: Received deleteUrl request', { shortCode });
+
       try {
         const existingUrl = await checkExistingAndNotExpired(prisma, shortCode);
 
@@ -182,10 +192,11 @@ export default {
 
         // Remove from cache
         await redis.del(shortCode);
-
+        
+        logger.info('[API Response]: deleteUrl completed', { shortCode });
         return true;
       } catch (error) {
-        console.error("Error in deleteUrl resolver:", error);
+        logger.error('[API Error]: Error deleting URL', { error, shortCode });
         if (error instanceof GraphQLError) {
           throw error; // Re-throw GraphQL errors
         }
