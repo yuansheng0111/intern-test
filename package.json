@@ -4,6 +4,7 @@
     "@graphql-tools/load-files": "^7.0.0",
     "@prisma/client": "^5.19.1",
     "apollo-server": "^3.13.0",
+    "bloom-filters": "^3.0.4",
     "graphql": "^16.9.0",
     "graphql-tag": "^2.12.6",
     "graphql-tools": "^9.0.1",

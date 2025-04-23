@@ -3,6 +3,7 @@ import { nanoid } from "nanoid";
 import { GraphQLError } from "graphql";
 import { PrismaClient } from '@prisma/client';
 import { Context, ShortenedURL } from "../typeDefs/types";
+import { addShortCodeToBloomFilter, isShortCodeInBloomFilter } from '../utils/bloom';
 
 const generateShortCode = (): string => {
   return nanoid(10);
@@ -45,6 +46,12 @@ export default {
       { shortCode }: { shortCode: string },
       { prisma, redis }: Context
     ): Promise<ShortenedURL | null> => {
+
+      if (!isShortCodeInBloomFilter(shortCode)) {
+        throw new GraphQLError('URL not found.', {
+          extensions: { code: 'NOT_FOUND' },
+        });
+      }
 
       try {
         // Try to get the URL from Redis cache
@@ -117,6 +124,8 @@ export default {
 
         const expiryInSeconds = ttl || 3600;
         await redis.set(finalShortCode, JSON.stringify(newUrl), 'EX', expiryInSeconds);
+
+        await addShortCodeToBloomFilter(finalShortCode);
 
         return newUrl;
       } catch (error) {

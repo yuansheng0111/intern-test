@@ -6,6 +6,7 @@ import Redis from 'ioredis';
 import { loadFiles } from '@graphql-tools/load-files';
 import { makeExecutableSchema } from '@graphql-tools/schema';
 import path from 'path';
+import { initializeBloomFilter, initializeBloomFilterClients } from './utils/bloom';
 
 const prisma = new PrismaClient();
 const redis = new Redis({
@@ -16,6 +17,9 @@ const redis = new Redis({
 });
 
 async function startServer() {
+  initializeBloomFilterClients(redis, prisma);
+  await initializeBloomFilter();
+
   const typeDefs = await loadFiles(path.join(__dirname, './typeDefs/*.graphql'));
   const resolvers = await loadFiles(path.join(__dirname, './resolvers/*.ts'));
 

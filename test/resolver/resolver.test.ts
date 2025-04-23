@@ -7,6 +7,7 @@ import Redis from "ioredis";
 import { loadFiles } from "@graphql-tools/load-files";
 import path from "path";
 import { Context } from "../../src/typeDefs/types";
+import { initializeBloomFilter, initializeBloomFilterClients, isShortCodeInBloomFilter, addShortCodeToBloomFilter } from "../../src/utils/bloom";
 
 let schema: GraphQLSchema;
 let prisma: PrismaClient;
@@ -33,6 +34,9 @@ before(async () => {
     username: process.env.REDIS_USER,
     password: process.env.REDIS_PASSWORD,
   });
+
+  await initializeBloomFilterClients(redis, prisma);
+  await initializeBloomFilter();
 });
 
 after(async () => {
@@ -43,6 +47,8 @@ after(async () => {
 beforeEach(async () => {
   await prisma.shortenedURL.deleteMany();
   await redis.flushall();
+  await initializeBloomFilterClients(redis, prisma);
+  await initializeBloomFilter();
 });
 
 describe("URL Shortener Resolvers", () => {
@@ -83,16 +89,18 @@ describe("URL Shortener Resolvers", () => {
     should.equal(savedUrl?.shortCode, result.data.createUrl.shortCode);
 
     const cachedUrl = await redis.get(result.data.createUrl.shortCode);
-    // should.equal(cachedUrl, "https://example.com");
     const cachedData = JSON.parse(cachedUrl as string);
     should.equal(cachedData.originalUrl, "https://example.com");
+
+    should.equal(isShortCodeInBloomFilter(result.data.createUrl.shortCode), true);
   });
 
   it("should get an existing URL", async () => {
     const originalUrl = "https://existing.com";
     const shortCode = "existingCode";
     await prisma.shortenedURL.create({ data: { originalUrl, shortCode } });
-    await redis.set(shortCode, JSON.stringify({ originalUrl, shortCode })); // 模拟已存在的缓存
+    await redis.set(shortCode, JSON.stringify({ originalUrl, shortCode })); // stimulate existing cache
+    await addShortCodeToBloomFilter(shortCode); // stimulate existing Bloom Filter
 
     const query = `
       query {
@@ -113,6 +121,7 @@ describe("URL Shortener Resolvers", () => {
     should.exist(result.data);
     should.equal(result.data.getUrl.originalUrl, originalUrl);
     should.equal(result.data.getUrl.shortCode, shortCode);
+    should.equal(isShortCodeInBloomFilter(shortCode), true);
   });
 
   it("should update an existing URL", async () => {
@@ -120,7 +129,8 @@ describe("URL Shortener Resolvers", () => {
     const shortCode = "updateCode";
     const newOriginalUrl = "https://new.com";
     await prisma.shortenedURL.create({ data: { originalUrl, shortCode } });
-    await redis.set(shortCode, JSON.stringify({ originalUrl, shortCode })); // 模拟已存在的缓存
+    await redis.set(shortCode, JSON.stringify({ originalUrl, shortCode })); // stimulate existing cache
+    await addShortCodeToBloomFilter(shortCode); // stimulate existing Bloom Filter
 
     const query = `
       mutation {
@@ -237,5 +247,31 @@ describe("URL Shortener Resolvers", () => {
     should.exist(result.errors);
     should.equal(result.errors[0].message, 'URL with short code "nonExistentCode" not found.');
     should.equal(result.errors[0].extensions.code, 'NOT_FOUND');
+  });
+
+  it("should return null for a non-existing URL and Bloom Filter indicates absence", async () => {
+    const nonExistingCode = "nonExisting";
+    // make sure the Bloom Filter does not contain nonExistingCode
+    // (this may require clearing the Bloom Filter in beforeEach if your implementation persists)
+  
+    const query = `
+      query {
+        getUrl(shortCode: "${nonExistingCode}") {
+          originalUrl
+          shortCode
+        }
+      }
+    `;
+  
+    const result: any = await graphql({
+      schema,
+      source: query,
+      contextValue: context,
+    });
+  
+    should.exist(result.errors);
+    should.not.exist(result.data?.getUrl);
+    should.equal(result.errors[0].extensions.code, 'NOT_FOUND');
+    should.equal(isShortCodeInBloomFilter(nonExistingCode), false);
   });
 });
