@@ -24,7 +24,8 @@
     "build": "tsc",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
-    "test": "mocha --require ts-node/register 'test/**/*.test.ts'"
+    "test": "mocha --require ts-node/register 'test/**/*.test.ts'",
+    "format": "prettier --write ."
   },
   "mocha": {
     "require": [
@@ -41,6 +42,7 @@
     "@types/sinon": "^17.0.3",
     "esm": "^3.2.25",
     "mocha": "^10.7.3",
+    "prettier": "^3.5.3",
     "should": "^13.2.3",
     "sinon": "^18.0.0",
     "ts-mocha": "^10.0.0",

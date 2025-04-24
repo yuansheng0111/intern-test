@@ -1,10 +1,10 @@
-import { URL } from "url";
-import { nanoid } from "nanoid";
-import { GraphQLError } from "graphql";
+import { URL } from 'url';
+import { nanoid } from 'nanoid';
+import { GraphQLError } from 'graphql';
 import { PrismaClient } from '@prisma/client';
-import { Context, ShortenedURL } from "../typeDefs/types";
+import { Context, ShortenedURL } from '../typeDefs/types';
 import { addShortCodeToBloomFilter, isShortCodeInBloomFilter } from '../utils/bloom';
-import logger from '../logger'
+import logger from '../logger';
 
 const generateShortCode = (): string => {
   return nanoid(10);
@@ -20,15 +20,13 @@ const isValidUrl = (urlString: string): boolean => {
   }
 };
 
-const checkExistingAndNotExpired = async (
-  prisma: PrismaClient,
-  shortCode: string
-): Promise<ShortenedURL> => {
+const checkExistingAndNotExpired = async (prisma: PrismaClient, shortCode: string): Promise<ShortenedURL> => {
   const existingUrl = await prisma.shortenedURL.findUnique({ where: { shortCode } });
 
   if (!existingUrl) {
-    throw new GraphQLError(`URL with short code "${shortCode}" not found.`,
-      { extensions: { code: 'NOT_FOUND' } });
+    throw new GraphQLError(`URL with short code "${shortCode}" not found.`, {
+      extensions: { code: 'NOT_FOUND' },
+    });
   }
 
   if (existingUrl.expiredAt && new Date(existingUrl.expiredAt) <= new Date()) {
@@ -45,7 +43,7 @@ export default {
     getUrl: async (
       _: any,
       { shortCode }: { shortCode: string },
-      { prisma, redis }: Context
+      { prisma, redis }: Context,
     ): Promise<ShortenedURL | null> => {
       logger.info('[API Request]: Received getUrl request', { shortCode });
 
@@ -74,7 +72,7 @@ export default {
         const expiryInSeconds = existingUrl.expiredAt
           ? Math.max(0, Math.floor((new Date(existingUrl.expiredAt).getTime() - Date.now()) / 1000))
           : 3600; // Default 1 hour
-        await redis.set(shortCode, JSON.stringify(existingUrl), "EX", expiryInSeconds);
+        await redis.set(shortCode, JSON.stringify(existingUrl), 'EX', expiryInSeconds);
 
         logger.info('[API Response]: getUrl completed', { shortCode });
         return existingUrl;
@@ -83,8 +81,8 @@ export default {
         if (error instanceof GraphQLError && error.extensions.code === 'NOT_FOUND') {
           throw error; // Re-throw NOT_FOUND error
         }
-        throw new GraphQLError("Failed to retrieve URL", {
-          extensions: { code: "INTERNAL_SERVER_ERROR" },
+        throw new GraphQLError('Failed to retrieve URL', {
+          extensions: { code: 'INTERNAL_SERVER_ERROR' },
         });
       }
     },
@@ -93,7 +91,7 @@ export default {
     createUrl: async (
       _: any,
       { originalUrl, shortCode, ttl }: { originalUrl: string; shortCode?: string; ttl?: number },
-      { prisma, redis }: Context
+      { prisma, redis }: Context,
     ): Promise<ShortenedURL> => {
       logger.info('[API Request]: Received createUrl request', { originalUrl, shortCode, ttl });
       if (!isValidUrl(originalUrl)) {
@@ -103,9 +101,12 @@ export default {
       }
 
       if (shortCode && !/^[a-zA-Z0-9_-]+$/.test(shortCode)) {
-        throw new GraphQLError('Invalid short code format. Only alphanumeric characters, underscores, and hyphens are allowed.', {
-          extensions: { code: 'BAD_USER_INPUT' },
-        });
+        throw new GraphQLError(
+          'Invalid short code format. Only alphanumeric characters, underscores, and hyphens are allowed.',
+          {
+            extensions: { code: 'BAD_USER_INPUT' },
+          },
+        );
       }
 
       if (ttl !== undefined && (!Number.isInteger(ttl) || ttl <= 0)) {
@@ -131,7 +132,10 @@ export default {
 
         await addShortCodeToBloomFilter(finalShortCode);
 
-        logger.info('[API Response]: createUrl completed', { id: newUrl.id, shortCode: newUrl.shortCode });
+        logger.info('[API Response]: createUrl completed', {
+          id: newUrl.id,
+          shortCode: newUrl.shortCode,
+        });
 
         return newUrl;
       } catch (error) {
@@ -144,7 +148,7 @@ export default {
     updateUrl: async (
       _: any,
       { shortCode, newUrl }: { shortCode: string; newUrl: string },
-      { prisma, redis }: Context
+      { prisma, redis }: Context,
     ): Promise<ShortenedURL | null> => {
       logger.info('[API Request]: Received updateUrl request', { shortCode, newUrl });
       if (!isValidUrl(newUrl)) {
@@ -152,7 +156,7 @@ export default {
           extensions: { code: 'BAD_USER_INPUT' },
         });
       }
-      
+
       try {
         await checkExistingAndNotExpired(prisma, shortCode);
 
@@ -163,7 +167,7 @@ export default {
 
         // Update the cache
         await redis.set(shortCode, JSON.stringify(updatedUrl));
-        
+
         logger.info('[API Response]: updateUrl completed', { shortCode });
         return updatedUrl;
       } catch (error) {
@@ -172,22 +176,18 @@ export default {
           throw error; // Re-throw GraphQL errors
         }
         throw new GraphQLError(`Failed to update URL with short code: ${shortCode}`, {
-          extensions: { code: "INTERNAL_SERVER_ERROR" },
+          extensions: { code: 'INTERNAL_SERVER_ERROR' },
         });
       }
     },
-    deleteUrl: async (
-      _: any,
-      { shortCode }: { shortCode: string },
-      { prisma, redis }: Context
-    ): Promise<boolean> => {
+    deleteUrl: async (_: any, { shortCode }: { shortCode: string }, { prisma, redis }: Context): Promise<boolean> => {
       logger.info('[API Request]: Received deleteUrl request', { shortCode });
 
       try {
         await checkExistingAndNotExpired(prisma, shortCode);
         await prisma.shortenedURL.delete({ where: { shortCode } });
         await redis.del(shortCode);
-        
+
         logger.info('[API Response]: deleteUrl completed', { shortCode });
         return true;
       } catch (error) {

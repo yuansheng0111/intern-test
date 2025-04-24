@@ -7,7 +7,7 @@ import { loadFiles } from '@graphql-tools/load-files';
 import { makeExecutableSchema } from '@graphql-tools/schema';
 import path from 'path';
 import { initializeBloomFilter, initializeBloomFilterClients } from './utils/bloom';
-import logger from './logger'
+import logger from './logger';
 
 const prisma = new PrismaClient();
 const redis = new Redis({
@@ -34,9 +34,12 @@ async function startServer() {
   const app = express();
   app.use(express.json());
 
-  app.use('/graphql', expressMiddleware(server, {
-    context: async () => ({ prisma, redis }),
-  }));
+  app.use(
+    '/graphql',
+    expressMiddleware(server, {
+      context: async () => ({ prisma, redis }),
+    }),
+  );
 
   const PORT = process.env.PORT || 4000;
   app.listen(PORT, () => {

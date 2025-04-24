@@ -1,5 +1,5 @@
-import { PrismaClient } from "@prisma/client";
-import { Redis } from "ioredis";
+import { PrismaClient } from '@prisma/client';
+import { Redis } from 'ioredis';
 
 export interface Context {
   prisma: PrismaClient;

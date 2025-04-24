@@ -171,3 +171,7 @@ it('should create a new shortened URL', async () => {
 3. 監控與日誌：
     - 引入 Pino 進行結構化日誌記錄，輸出到終端 (易讀格式) 和 `app.log` 檔案
     - 記錄關鍵應用程式事件、API 請求
+
+4. 程式碼風格：
+    - 引入 Prettier 自動格式化程式碼，確保風格一致性
+    - 通過 `npm run format` 命令可格式化整個專案

@@ -3,5 +3,5 @@ module.exports = {
   spec: 'test/**/*.ts',
   require: ['ts-node/register', 'tsconfig-paths/register'],
   recursive: true,
-  timeout: 5000
+  timeout: 5000,
 };

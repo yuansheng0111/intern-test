@@ -48,37 +48,37 @@ async function saveBloomFilterToRedis(filter: BloomFilter): Promise<void> {
 }
 
 function calculateNbHashes(size: number, expectedItems: number, errorRate: number): number {
-    return Math.ceil(-(size / expectedItems) * Math.log(errorRate));
-  }
+  return Math.ceil(-(size / expectedItems) * Math.log(errorRate));
+}
 
 async function initializeBloomFilter(): Promise<void> {
-    if (!prismaClient) {
-      console.warn('Prisma client not initialized. Cannot initialize Bloom Filter from database.');
-      return;
-    }
-  
-    let loadedFilter = await loadBloomFilterFromRedis();
-  
-    if (loadedFilter) {
-      bloomFilter = loadedFilter;
-      console.log('Bloom Filter loaded from Redis.');
-    } else {
-        const expectedItems = BLOOM_FILTER_SIZE / 2; // estimated items
+  if (!prismaClient) {
+    console.warn('Prisma client not initialized. Cannot initialize Bloom Filter from database.');
+    return;
+  }
+
+  let loadedFilter = await loadBloomFilterFromRedis();
+
+  if (loadedFilter) {
+    bloomFilter = loadedFilter;
+    console.log('Bloom Filter loaded from Redis.');
+  } else {
+    const expectedItems = BLOOM_FILTER_SIZE / 2; // estimated items
     const nbHashes = calculateNbHashes(BLOOM_FILTER_SIZE, expectedItems, BLOOM_FILTER_ERROR_RATE);
 
     bloomFilter = new BloomFilter(BLOOM_FILTER_SIZE, nbHashes);
 
-      try {
-        const existingUrls = await prismaClient.shortenedURL.findMany({ select: { shortCode: true } });
-        existingUrls.forEach(url => bloomFilter!.add(url.shortCode));
-        await saveBloomFilterToRedis(bloomFilter);
-        console.log('New Bloom Filter created and initialized with existing short codes.');
-      } catch (error) {
-        console.error('Error initializing Bloom Filter from database:', error);
-        bloomFilter = null;
-      }
+    try {
+      const existingUrls = await prismaClient.shortenedURL.findMany({ select: { shortCode: true } });
+      existingUrls.forEach((url) => bloomFilter!.add(url.shortCode));
+      await saveBloomFilterToRedis(bloomFilter);
+      console.log('New Bloom Filter created and initialized with existing short codes.');
+    } catch (error) {
+      console.error('Error initializing Bloom Filter from database:', error);
+      bloomFilter = null;
     }
   }
+}
 
 export const isShortCodeInBloomFilter = (shortCode: string): boolean => {
   return bloomFilter ? bloomFilter.has(shortCode) : false;
