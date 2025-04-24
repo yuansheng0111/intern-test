@@ -19,20 +19,15 @@ const redis = new Redis({
 
 async function startServer() {
   logger.info('[Server]: Starting server...');
-  initializeBloomFilterClients(redis, prisma);
+  await initializeBloomFilterClients(redis, prisma);
   await initializeBloomFilter();
 
   const typeDefs = await loadFiles(path.join(__dirname, './typeDefs/*.graphql'));
   const resolvers = await loadFiles(path.join(__dirname, './resolvers/*.ts'));
 
-  const schema = makeExecutableSchema({
-    typeDefs,
-    resolvers,
-  });
+  const schema = makeExecutableSchema({ typeDefs, resolvers });
 
-  const server = new ApolloServer({
-    schema,
-  });
+  const server = new ApolloServer({ schema });
 
   await server.start();
 

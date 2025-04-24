@@ -14,12 +14,9 @@ let prisma: PrismaClient;
 let redis: Redis;
 
 before(async () => {
-  const typeDefs = await loadFiles(
-    path.join(__dirname, "../../src/typeDefs/*.graphql")
-  );
-  const resolvers = await loadFiles(
-    path.join(__dirname, "../../src/resolvers/*.ts")
-  );
+  const typeDefs = await loadFiles(path.join(__dirname, "../../src/typeDefs/*.graphql"));
+  const resolvers = await loadFiles(path.join(__dirname, "../../src/resolvers/*.ts"));
+
   schema = makeExecutableSchema({
     typeDefs,
     resolvers,
@@ -164,7 +161,6 @@ describe("URL Shortener Resolvers", () => {
     const originalUrl = "https://delete.com";
     const shortCode = "deleteCode";
     await prisma.shortenedURL.create({ data: { originalUrl, shortCode } });
-    await redis.set(shortCode, JSON.stringify({ originalUrl, shortCode }));
 
     const query = `
       mutation {
@@ -275,3 +271,4 @@ describe("URL Shortener Resolvers", () => {
     should.equal(isShortCodeInBloomFilter(nonExistingCode), false);
   });
 });
+

@@ -1,5 +1,4 @@
 import pino from 'pino';
-import pretty from 'pino-pretty';
 
 const transport = pino.transport({
   targets: [

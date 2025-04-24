@@ -10,11 +10,12 @@ const generateShortCode = (): string => {
   return nanoid(10);
 };
 
-const isValidUrl = (url: string): boolean => {
+const isValidUrl = (urlString: string): boolean => {
   try {
-    new URL(url);
+    // Attempt to create a URL object from the string
+    new URL(urlString);
     return true;
-  } catch (error) {
+  } catch {
     return false;
   }
 };
@@ -26,9 +27,8 @@ const checkExistingAndNotExpired = async (
   const existingUrl = await prisma.shortenedURL.findUnique({ where: { shortCode } });
 
   if (!existingUrl) {
-    throw new GraphQLError(`URL with short code "${shortCode}" not found.`, {
-      extensions: { code: 'NOT_FOUND' },
-    });
+    throw new GraphQLError(`URL with short code "${shortCode}" not found.`,
+      { extensions: { code: 'NOT_FOUND' } });
   }
 
   if (existingUrl.expiredAt && new Date(existingUrl.expiredAt) <= new Date()) {
@@ -143,22 +143,22 @@ export default {
     },
     updateUrl: async (
       _: any,
-      { shortCode, newUrl: originalUrl }: { shortCode: string; newUrl: string },
+      { shortCode, newUrl }: { shortCode: string; newUrl: string },
       { prisma, redis }: Context
     ): Promise<ShortenedURL | null> => {
-      logger.info('[API Request]: Received updateUrl request', { shortCode, originalUrl });
-      if (!isValidUrl(originalUrl)) {
+      logger.info('[API Request]: Received updateUrl request', { shortCode, newUrl });
+      if (!isValidUrl(newUrl)) {
         throw new GraphQLError('Invalid URL format.', {
           extensions: { code: 'BAD_USER_INPUT' },
         });
       }
       
       try {
-        const existingUrl = await checkExistingAndNotExpired(prisma, shortCode);
+        await checkExistingAndNotExpired(prisma, shortCode);
 
         const updatedUrl = await prisma.shortenedURL.update({
           where: { shortCode },
-          data: { originalUrl },
+          data: { originalUrl: newUrl },
         });
 
         // Update the cache
@@ -167,7 +167,7 @@ export default {
         logger.info('[API Response]: updateUrl completed', { shortCode });
         return updatedUrl;
       } catch (error) {
-        logger.error('[API Error]: Error updating URL', { error, shortCode, originalUrl });
+        logger.error('[API Error]: Error updating URL', { error, shortCode, newUrl });
         if (error instanceof GraphQLError) {
           throw error; // Re-throw GraphQL errors
         }
@@ -184,13 +184,8 @@ export default {
       logger.info('[API Request]: Received deleteUrl request', { shortCode });
 
       try {
-        const existingUrl = await checkExistingAndNotExpired(prisma, shortCode);
-
-        await prisma.shortenedURL.delete({
-          where: { shortCode },
-        });
-
-        // Remove from cache
+        await checkExistingAndNotExpired(prisma, shortCode);
+        await prisma.shortenedURL.delete({ where: { shortCode } });
         await redis.del(shortCode);
         
         logger.info('[API Response]: deleteUrl completed', { shortCode });
